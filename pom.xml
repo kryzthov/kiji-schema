@@ -1,0 +1,83 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>org.wibidata.schema</groupId>
+  <artifactId>wibi-schema</artifactId>
+  <version>1.0-SNAPSHOT</version>
+  <packaging>jar</packaging>
+
+  <name>wibi-schema</name>
+  <description>A schema management layer for Apache HBase</description>
+  <inceptionYear>2012</inceptionYear>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <!-- Versions of maven artifacts. -->
+    <avro.version>1.7.0</avro.version>
+    <guava.version>11.0.2</guava.version>
+    <hbase.version>0.92.1-cdh4.0.1</hbase.version>
+    <junit.version>4.10</junit.version>
+    <log4j.version>1.2.16</log4j.version>
+    <mrunit.version>0.8.1-incubating</mrunit.version>
+    <slf4j-api.version>1.6.1</slf4j-api.version>
+    <slf4j-log4j12.version>1.6.1</slf4j-log4j12.version>
+
+    <!-- Versions of maven plugins. -->
+    <hbase-maven-plugin.version>1.0.7-cdh4</hbase-maven-plugin.version>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.apache.avro</groupId>
+      <artifactId>avro</artifactId>
+      <version>${avro.version}</version>
+      <scope>compile</scope>
+    </dependency>
+      <dependency>
+      <groupId>org.apache.avro</groupId>
+      <artifactId>avro-ipc</artifactId>
+      <version>${avro.version}</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.avro</groupId>
+      <artifactId>avro-mapred</artifactId>
+      <version>${avro.version}</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.google.guava</groupId>
+      <artifactId>guava</artifactId>
+      <version>${guava.version}</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>${junit.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>log4j</groupId>
+      <artifactId>log4j</artifactId>
+      <version>${log4j.version}</version>
+      <scope>runtime</scope>
+    </dependency>
+  </dependencies>
+
+  <distributionManagement>
+    <!-- Internal maven repository. -->
+    <repository>
+      <id>wibidata-maven</id>
+      <name>wibidata-maven-releases</name>
+      <url>https://maven.wibidata.net/artifactory/wibidata-releases</url>
+    </repository>
+    <snapshotRepository>
+      <id>wibidata-maven</id>
+      <name>wibidata-maven-snapshots</name>
+      <url>https://maven.wibidata.net/artifactory/wibidata-snapshots</url>
+    </snapshotRepository>
+  </distributionManagement>
+
+</project>
