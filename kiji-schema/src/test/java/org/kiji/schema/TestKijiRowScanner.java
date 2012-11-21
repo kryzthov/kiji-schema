@@ -31,6 +31,7 @@ import static org.kiji.schema.util.ScanEquals.eqScan;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.KeyValue;
@@ -78,7 +79,9 @@ public class TestKijiRowScanner extends KijiClientTest {
     final KijiTableLayout tableLayout = getKiji().getMetaTable().getTableLayout("table");
     final Scan expectedScan = dataRequestAdapter.toScan(tableLayout);
 
-    expectedScan.setStartRow(table.getEntityId("foo").getHBaseRowKey());
+    List<Object> kijiFooKey = new ArrayList<Object>();
+    kijiFooKey.add("foo");
+    expectedScan.setStartRow(table.getEntityId(kijiFooKey).getHBaseRowKey());
 
     final ResultScanner cannedResultScanner = createMock(ResultScanner.class);
     final ArrayList<Result> cannedIterable = new ArrayList<Result>();
@@ -91,21 +94,21 @@ public class TestKijiRowScanner extends KijiClientTest {
     final KijiCellEncoder encoder = DefaultKijiCellEncoderFactory.get().create(cellSpec);
 
     final Result cannedResult1 = new Result(new KeyValue[] {
-      new KeyValue(table.getEntityId("foo").getHBaseRowKey(),
+      new KeyValue(table.getEntityId(kijiFooKey).getHBaseRowKey(),
           hcolumn.getFamily(),
           hcolumn.getQualifier(),
           encoder.encode("a")),
     });
 
     final Result cannedResult2 = new Result(new KeyValue[] {
-      new KeyValue(table.getEntityId("foo").getHBaseRowKey(),
+      new KeyValue(table.getEntityId(kijiFooKey).getHBaseRowKey(),
           hcolumn.getFamily(),
           hcolumn.getQualifier(),
           encoder.encode("b")),
     });
 
     final Result cannedResult3 = new Result(new KeyValue[] {
-      new KeyValue(table.getEntityId("foo").getHBaseRowKey(),
+      new KeyValue(table.getEntityId(kijiFooKey).getHBaseRowKey(),
           hcolumn.getFamily(),
           hcolumn.getQualifier(),
           encoder.encode("c")),
@@ -125,7 +128,7 @@ public class TestKijiRowScanner extends KijiClientTest {
     replay(htable);
 
     KijiTableReader reader = table.openTableReader();
-    KijiRowScanner scanner = reader.getScanner(dataRequest, table.getEntityId("foo"), null);
+    KijiRowScanner scanner = reader.getScanner(dataRequest, table.getEntityId(kijiFooKey), null);
     Iterator<KijiRowData> iterator = scanner.iterator();
 
     assertTrue(iterator.hasNext());

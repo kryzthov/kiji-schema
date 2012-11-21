@@ -29,6 +29,8 @@ import static org.kiji.schema.util.IncrementEquals.eqIncrement;
 import static org.kiji.schema.util.PutEquals.eqPut;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.KeyValue;
@@ -86,7 +88,9 @@ public class TestHBaseKijiTableWriter extends KijiClientTest {
   @Test
   public void testPutWithTimestamp() throws Exception {
     // Set the expectations that the writer will execute on the HTable.
-    Put expectedPut = new Put(mKijiTable.getEntityId("foo").getHBaseRowKey());
+    List<Object> kijiFooKey = new ArrayList<Object>();
+    kijiFooKey.add("foo");
+    Put expectedPut = new Put(mKijiTable.getEntityId(kijiFooKey).getHBaseRowKey());
     final KijiColumnName column = new KijiColumnName("info", "name");
     final HBaseColumnName hbaseColumnName = mColumnNameTranslator.toHBaseColumnName(column);
     final KijiTableLayout layout = getKiji().getMetaTable().getTableLayout("user");
@@ -102,19 +106,21 @@ public class TestHBaseKijiTableWriter extends KijiClientTest {
     replay(mHTable);
     mShouldVerifyMocks = true;
 
-    mWriter.put(mKijiTable.getEntityId("foo"), "info", "name", 123L, "baz");
+    mWriter.put(mKijiTable.getEntityId(kijiFooKey), "info", "name", 123L, "baz");
   }
 
   @Test
   public void testIncrement() throws Exception {
     // Set the expectations that the writer will execute on the HTable.
+    List<Object> kijiFooKey = new ArrayList<Object>();
+    kijiFooKey.add("foo");
     final HBaseColumnName hbaseColumnName = mColumnNameTranslator.toHBaseColumnName(
         new KijiColumnName("info", "visits"));
     final Increment expectedIncrement =
-        new Increment(mKijiTable.getEntityId("foo").getHBaseRowKey());
+        new Increment(mKijiTable.getEntityId(kijiFooKey).getHBaseRowKey());
     expectedIncrement.addColumn(hbaseColumnName.getFamily(), hbaseColumnName.getQualifier(), 5L);
     final Result cannedResult = new Result(new KeyValue[] {
-        new KeyValue(mKijiTable.getEntityId("foo").getHBaseRowKey(),
+        new KeyValue(mKijiTable.getEntityId(kijiFooKey).getHBaseRowKey(),
             hbaseColumnName.getFamily(),
             hbaseColumnName.getQualifier(),
             123L,
@@ -127,7 +133,7 @@ public class TestHBaseKijiTableWriter extends KijiClientTest {
     replay(mHTable);
 
     final KijiCounter kijiCounter =
-        mWriter.increment(mKijiTable.getEntityId("foo"), "info", "visits", 5L);
+        mWriter.increment(mKijiTable.getEntityId(kijiFooKey), "info", "visits", 5L);
     assertEquals(123L, kijiCounter.getTimestamp());
     assertEquals(12L, kijiCounter.getValue());
   }
@@ -136,15 +142,19 @@ public class TestHBaseKijiTableWriter extends KijiClientTest {
   public void testIncrementAColumnThatIsNotACounter() throws Exception {
     // This should throw an exception because we are attempting to increment a column that
     // isn't a counter.
-    mWriter.increment(mKijiTable.getEntityId("foo"), "info", "name", 5L);
+    List<Object> kijiFooKey = new ArrayList<Object>();
+    kijiFooKey.add("foo");
+    mWriter.increment(mKijiTable.getEntityId(kijiFooKey), "info", "name", 5L);
   }
 
   @Test
   public void testSetCounter() throws Exception {
     // Set the expectations that the writer will execute on the HTable.
+    List<Object> kijiFooKey = new ArrayList<Object>();
+    kijiFooKey.add("foo");
     final HBaseColumnName hbaseColumnName = mColumnNameTranslator.toHBaseColumnName(
         new KijiColumnName("info", "visits"));
-    final Put expectedPut = new Put(mKijiTable.getEntityId("foo").getHBaseRowKey());
+    final Put expectedPut = new Put(mKijiTable.getEntityId(kijiFooKey).getHBaseRowKey());
     expectedPut.add(
         hbaseColumnName.getFamily(), hbaseColumnName.getQualifier(), Bytes.toBytes(5L));
     mHTable.put(eqPut(expectedPut));
@@ -152,6 +162,6 @@ public class TestHBaseKijiTableWriter extends KijiClientTest {
     mHTable.close();
     replay(mHTable);
 
-    mWriter.put(mKijiTable.getEntityId("foo"), "info", "visits", 5L);
+    mWriter.setCounter(mKijiTable.getEntityId(kijiFooKey), "info", "visits", 5L);
   }
 }
