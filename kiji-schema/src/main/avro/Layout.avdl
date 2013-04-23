@@ -608,4 +608,37 @@ protocol KijiTableLayoutRecords {
     MetaTableBackup meta_table;
   }
 
+  // ---------------------------------------------------------------------------
+
+  /** Type of compression for the data within a locality group. */
+  enum OperatorType {
+    EQUAL,
+    NOT_EQUAL,
+
+    LESS_THAN,
+    LESS_OR_EQUAL,
+
+    GREATER_THAN,
+    GREATER_OR_EQUAL,
+
+    MATCH_REGEX
+  }
+
+  /** Filter for a single value. */
+  record ValueFilter {
+    OperatorType operator;
+    union { string, int, long } operand;
+  }
+
+  record KeyComponentFilter {
+    int component_index;
+    ValueFilter filter;
+  }
+
+  /** Filter for a composite key. */
+  record CompositeKeyFilter {
+    RowKeyFormat2 format;
+    array<KeyComponentFilter> filters;
+  }
+
 }
