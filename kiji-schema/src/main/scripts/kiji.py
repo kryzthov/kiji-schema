@@ -254,7 +254,7 @@ def normalize_classpath(classpath):
     classpath = unique(classpath, key=md5_or_path)
 
     # Filter JAR files based on the Bundle-Name declared in the MANIFEST.MF file:
-    if True:
+    if False:
         def jar_bundle_name(path):
             bundle_name_version = get_jar_bundle_version(path)
             if bundle_name_version is None:
@@ -271,7 +271,7 @@ def normalize_classpath(classpath):
     # parsed from the META-INF/maven/group-id/artifact-id/pom.xml files:
     # Note: this is very imperfect.
     # We could probably parse the pom.xml file content directly.
-    if True:
+    if False:
         def maven_artifact(path):
             artifacts = list(get_jar_maven_artifact(path))
             if len(artifacts) == 0:
@@ -579,6 +579,7 @@ def make_arg_parser():
         description="Kiji command-line interface.",
         epilog=ENV_VAR_HELP,
         formatter_class=text_formatter,
+        add_help=False,
     )
 
     # Global flags available in all commands:
@@ -593,24 +594,6 @@ def make_arg_parser():
               """With regex: --cp-filter='not re.match(r"servlet.*[.]jar", name)' """
               "excludes any entry whose file name matchs 'servlet*.jar'."),
     )
-
-    parser.add_argument(
-        dest="command",
-        default="tool-launcher",
-        nargs='?',
-        help="Command to perform: classpath, jar or a Kiji command.",
-    )
-
-    # classpath_parser = subparsers.add_parser(
-    #     "classpath",
-    #     help="Prints the Kiji classpath on the standard output.",
-    #     formatter_class=text_formatter,
-    # )
-    # jar_parser = subparsers.add_parser(
-    #     "jar",
-    #     help="Runs an arbitrary Java program with Kiji libraries on the classpath.",
-    #     formatter_class=text_formatter,
-    # )
 
     parser.add_argument(
         "--jars",
@@ -635,6 +618,7 @@ def make_jar_arg_parser():
         description="Kiji command-line JAR runner.",
         epilog=ENV_VAR_HELP,
         formatter_class=text_formatter,
+        add_help=False,
     )
 
     # Flags specific to the 'jar' command:
@@ -647,6 +631,30 @@ def make_jar_arg_parser():
         nargs="*",
         help=("Optional list of options for the JVM "
               "(eg. --java-opts -Xmx2G -Xms1G -Dprop=val ...)."),
+    )
+
+    parser.add_argument(
+        "--cp-filter",
+        default="",
+        help=("Classpath entry filter, expressed as a Python expression. "
+              "Available symbols are: 'path', 'name', 'os' and 're'. "
+              "For example, the filter: --cp-filter='\"jasper\" not in path' "
+              "excludes entries whose path includes the word 'jasper'. "
+              """With regex: --cp-filter='not re.match(r"servlet.*[.]jar", name)' """
+              "excludes any entry whose file name matchs 'servlet*.jar'."),
+    )
+
+    parser.add_argument(
+        "--hadoop-distribution",
+        default=None,
+        help=("Name of the Hadoop distribution to use (eg. hadoop1 or hadoop2).\n"
+              "By default, this is automatically inferred from Hadoop's self reported version."),
+    )
+
+    parser.add_argument(
+        "--jars",
+        nargs="*",
+        help="List of JAR files to place on the classpath and the distributed cache.",
     )
 
     return parser
@@ -779,6 +787,13 @@ def parse_log_level(level):
     raise Error("Invalid logging-level: %r" % level)
 
 
+def get_log_level(args):
+    for arg in args:
+        if arg.startswith("--log-level="):
+            return parse_log_level(arg[len("--log-level="):])
+    return logging.INFO
+
+
 def setup_logging(log_level):
   """Initializes the logging system.
 
@@ -819,25 +834,34 @@ def setup_logging(log_level):
 # --------------------------------------------------------------------------------------------------
 
 
-def main(parser, flags, args):
+def main(args):
     """Main entry of this Python program.
 
     Dispatches to the appropriate command.
 
     Args:
-      parser: Parser used to process the command-line arguments.
-      flags: Namespace object with the parsed flags.
-      args: Unknwon command-line arguments that were not parsed by parser.
+      args: Command-line arguments (program path excluded).
     Returns:
       Shell exit code.
     """
-    cli = KijiCLI(flags=flags, args=args, env=os.environ)
-    if (flags.command is None) or (flags.command == "help"):
-        parser.print_help()
+    command = None
+    for arg in args:
+        if not arg.startswith("-"):
+            command = arg
+            break
+
+    if (command is None) or (command == "help"):
+        print("USAGE STRING COMES HERE")
         return os.EX_USAGE
-    elif flags.command == "classpath":
+
+    elif command == "classpath":
+        jar_parser = make_jar_arg_parser()
+        (flags, jar_args) = jar_parser.parse_known_args(args)
+
+        cli = KijiCLI(flags=flags, args=jar_args, env=os.environ)
         return cli.classpath()
-    elif flags.command == "jar":
+
+    elif command == "jar":
         # Ugly hack to replicate the kiji shell script interface:
         jar_parser = make_jar_arg_parser()
         (jar_flags, jar_args) = jar_parser.parse_known_args(args)
@@ -845,14 +869,19 @@ def main(parser, flags, args):
         logging.debug("jar-flags = %r", jar_flags)
         logging.debug("jar-args = %r", jar_args)
 
-        for key, value in jar_flags._get_kwargs():
-            setattr(flags, key, value)
-        args.clear()
-        args.extend(jar_args)
-
+        cli = KijiCLI(flags=jar_flags, args=jar_args, env=os.environ)
         return cli.jar()
+
     else: # Catch-all for the KijiTool launcher
-        args.insert(0, KIJI_TOOL_LAUNCHER)
+        args.insert(0, "--class=%s" % KIJI_TOOL_LAUNCHER)
+
+        jar_parser = make_jar_arg_parser()
+        (jar_flags, jar_args) = jar_parser.parse_known_args(args)
+
+        logging.debug("jar-flags = %r", jar_flags)
+        logging.debug("jar-args = %r", jar_args)
+
+        cli = KijiCLI(flags=jar_flags, args=jar_args, env=os.environ)
         return cli.jar()
 
 
@@ -864,21 +893,17 @@ def init(args):
           args[0] is the path of this program (/path/to/kiji.py);
           args[1] is the first command-line argument, if any, etc.
     """
-    parser = make_arg_parser()
-    (flags, unparsed_args) = parser.parse_known_args(args[1:])
+    args = args[1:]  # Ignore program path
 
     try:
-        log_level = parse_log_level(flags.log_level)
+        log_level = get_log_level(args)
         setup_logging(log_level=log_level)
     except Error as err:
         print(err)
         return os.EX_USAGE
 
-    logging.debug("Parsed global flags: %r", flags)
-    logging.debug("Unparsed command-line arguments: %r", unparsed_args)
-
     # Run program:
-    sys.exit(main(parser, flags, unparsed_args))
+    sys.exit(main(args))
 
 
 if __name__ == "__main__":
