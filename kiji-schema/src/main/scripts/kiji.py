@@ -633,30 +633,6 @@ def make_jar_arg_parser():
               "(eg. --java-opts -Xmx2G -Xms1G -Dprop=val ...)."),
     )
 
-    parser.add_argument(
-        "--cp-filter",
-        default="",
-        help=("Classpath entry filter, expressed as a Python expression. "
-              "Available symbols are: 'path', 'name', 'os' and 're'. "
-              "For example, the filter: --cp-filter='\"jasper\" not in path' "
-              "excludes entries whose path includes the word 'jasper'. "
-              """With regex: --cp-filter='not re.match(r"servlet.*[.]jar", name)' """
-              "excludes any entry whose file name matchs 'servlet*.jar'."),
-    )
-
-    parser.add_argument(
-        "--hadoop-distribution",
-        default=None,
-        help=("Name of the Hadoop distribution to use (eg. hadoop1 or hadoop2).\n"
-              "By default, this is automatically inferred from Hadoop's self reported version."),
-    )
-
-    parser.add_argument(
-        "--jars",
-        nargs="*",
-        help="List of JAR files to place on the classpath and the distributed cache.",
-    )
-
     return parser
 
 
@@ -670,6 +646,8 @@ class KijiCLI(object):
         self._flags = flags
         self._args = args
         self._env = env
+
+        logging.debug("KijiCLI flags: %r - args: %r - env: %r", flags, args, env)
 
         # Construct a classpath filter, if any:
         cp_filter = None
@@ -733,13 +711,8 @@ class KijiCLI(object):
         print(":".join(self.kiji.get_classpath(lib_jars=lib_jars)))
         return os.EX_OK
 
-    def jar(self):
-        """Performs the 'jar' command."""
-        class_name = getattr(self.flags, "class")
-        if (class_name is None) and (len(self.args) > 0):
-            class_name = self.pop_args_head()
-        assert (class_name is not None), ("No class name specified with [--class=]<class>.")
-
+    def run_class(self, class_name):
+        """Performs the 'run-class' command."""
         lib_jars = []
         if self.flags.jars is not None:
             lib_jars.extend(self.flags.jars)
@@ -834,55 +807,70 @@ def setup_logging(log_level):
 # --------------------------------------------------------------------------------------------------
 
 
-def main(args):
+def merge_namespace(ns1, ns2):
+    """Merges two argparse.Namespace instances.
+
+    Args:
+        ns1, ns2: Namespaces to merge.
+    Returns:
+        A new Namespace with ns1 and ns2; ns2 entries override/shadow ns1 entries.
+    """
+    ns = argparse.Namespace()
+    for key, value in ns1._get_kwargs():
+        setattr(ns, key, value)
+    for key, value in ns2._get_kwargs():
+        setattr(ns, key, value)
+    return ns
+
+
+def main(parser, flags, args):
     """Main entry of this Python program.
 
     Dispatches to the appropriate command.
 
     Args:
-      args: Command-line arguments (program path excluded).
+        parser: argparse.ArgumentParser used to parse the command-line flags.
+        flags: argparse.Namespace with the parsed command-line flags.
+        args: Unparsed command-line arguments.
     Returns:
-      Shell exit code.
+        Shell exit code.
     """
-    command = None
-    for arg in args:
-        if not arg.startswith("-"):
-            command = arg
-            break
+    logging.debug("Main flags = %r - args = %r", flags, args)
+    args = args[1:]  # discard program path
 
-    if (command is None) or (command == "help"):
-        print("USAGE STRING COMES HERE")
+    command = None
+    if len(args) > 0:
+        command, args = args[0], args[1:]
+
+    if command is None:
+        parser.print_usage()
         return os.EX_USAGE
 
-    elif command == "classpath":
-        jar_parser = make_jar_arg_parser()
-        (flags, jar_args) = jar_parser.parse_known_args(args)
-
-        cli = KijiCLI(flags=flags, args=jar_args, env=os.environ)
+    if command == "classpath":
+        assert (len(args) == 0), ("Unexpected extra command-line arguments: %r" % args)
+        cli = KijiCLI(flags=flags, args=args, env=os.environ)
         return cli.classpath()
 
-    elif command == "jar":
-        # Ugly hack to replicate the kiji shell script interface:
+    if command == "run-class":
+        jar_parser = make_jar_arg_parser()
+        (jar_flags, jar_args) = jar_parser.parse_known_args(args)
+        logging.debug("JAR CLI flags = %r - args = %r", jar_flags, jar_args)
+
+        class_name = getattr(jar_flags, "class")
+        if (class_name is None) and (len(jar_args) > 0):
+            class_name, jar_args = jar_args[0], jar_args[1:]
+        assert (class_name is not None), ("No class name specified with [--class=]<class>.")
+    else:
+        class_name = KIJI_TOOL_LAUNCHER
+        args.insert(0, command)
+
         jar_parser = make_jar_arg_parser()
         (jar_flags, jar_args) = jar_parser.parse_known_args(args)
 
-        logging.debug("jar-flags = %r", jar_flags)
-        logging.debug("jar-args = %r", jar_args)
+    flags = merge_namespace(flags, jar_flags)
 
-        cli = KijiCLI(flags=jar_flags, args=jar_args, env=os.environ)
-        return cli.jar()
-
-    else: # Catch-all for the KijiTool launcher
-        args.insert(0, "--class=%s" % KIJI_TOOL_LAUNCHER)
-
-        jar_parser = make_jar_arg_parser()
-        (jar_flags, jar_args) = jar_parser.parse_known_args(args)
-
-        logging.debug("jar-flags = %r", jar_flags)
-        logging.debug("jar-args = %r", jar_args)
-
-        cli = KijiCLI(flags=jar_flags, args=jar_args, env=os.environ)
-        return cli.jar()
+    cli = KijiCLI(flags=flags, args=jar_args, env=os.environ)
+    return cli.run_class(class_name=class_name)
 
 
 def init(args):
@@ -893,17 +881,18 @@ def init(args):
           args[0] is the path of this program (/path/to/kiji.py);
           args[1] is the first command-line argument, if any, etc.
     """
-    args = args[1:]  # Ignore program path
+    parser = make_arg_parser()
+    (flags, unparsed_args) = parser.parse_known_args(args)
 
     try:
-        log_level = get_log_level(args)
+        log_level = parse_log_level(flags.log_level)
         setup_logging(log_level=log_level)
     except Error as err:
         print(err)
         return os.EX_USAGE
 
     # Run program:
-    sys.exit(main(args))
+    sys.exit(main(parser, flags, unparsed_args))
 
 
 if __name__ == "__main__":
