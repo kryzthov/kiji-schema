@@ -113,15 +113,15 @@
       <artifactId>hadoop-client</artifactId>
       <scope>provided</scope>
       <optional>true</optional>
-      <version>${cdh4-hadoop.version}</version>
+      <version>${hadoop.version}</version>
     </dependency>
 
     <dependency>
       <groupId>org.apache.hbase</groupId>
-      <artifactId>hbase</artifactId>
+      <artifactId>hbase-server</artifactId>
       <scope>provided</scope>
       <optional>true</optional>
-      <version>${cdh4-hbase.version}</version>
+      <version>${hbase.version}</version>
     </dependency>
 
   </dependencies>
